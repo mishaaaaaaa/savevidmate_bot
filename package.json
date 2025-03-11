@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node --loader ts-node/esm src/bot.ts"
+    "start": "apt update && apt install -y python3-pip && pip3 install yt-dlp && npm run bot",
+    "bot": "node --loader ts-node/esm src/bot.ts"
   },
   "dependencies": {
     "dotenv": "^16.0.3",
