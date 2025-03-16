@@ -46,85 +46,143 @@ bot.on("text", async (ctx) => {
     return ctx.reply("Надішли мені коректне посилання на відео.");
   }
 
-  ctx.reply("Обробляю посилання...");
+  ctx.reply("🔍 Отримую інформацію про відео...");
 
-  const fileName = `video_${randomUUID()}.mp4`;
-
-  // Команда для загрузки видео
-
-  const command = ytDlpCommands.default(fileName, url);
-
-  // здесь получениея размера видео и его логирование
-
-  // await exec(ytDlpCommands.analyzeVideo(url), async (error, stdout, stderr) => {
-  //   if (error || stderr) {
-  //     console.error("❌ Ошибка получения информации о видео:", error || stderr);
-  //     return ctx.reply("⚠️ Не вдалося отримати інформацію про відео.");
-  //   }
-
-  //   const metadata = JSON.parse(stdout);
-  //   const fileSize = metadata.filesize ?? metadata.filesize_approx ?? 0; // Размер в байтах
-  //   const maxSize = 50 * 1024 * 1024; // 50MB
-
-  //   if (fileSize > maxSize) {
-  //     return ctx.reply(
-  //       `❌ Відео занадто велике (${(fileSize / 1024 / 1024).toFixed(
-  //         2
-  //       )} MB). Ліміт: 50 MB.`
-  //     );
-  //   }
-
-  //   ctx.reply(
-  //     `✅ Розмір відео: ${(fileSize / 1024 / 1024).toFixed(
-  //       2
-  //     )} MB. Завантажую...`
-  //   );
-  // });
-
-  exec(command, async (error, stdout, stderr) => {
-    console.log(stdout);
-    if (error) {
-      console.error(`❌ Ошибка: ${error.message}`);
-      return ctx.reply("Не вдалося завантажити відео.");
+  // Получаем список доступных форматов
+  exec(ytDlpCommands.listFormats(url), async (error, stdout, stderr) => {
+    if (error || stderr) {
+      console.error("❌ Ошибка получения форматов:", error || stderr);
+      return ctx.reply("⚠️ Не вдалося отримати інформацію про формати відео.");
     }
-    if (stderr) console.error(`⚠️ STDERR: ${stderr}`);
 
-    if (fs.existsSync(fileName)) {
-      await ctx.replyWithVideo({ source: fileName });
+    try {
+      // Фильтруем форматы, оставляя только h264 без watermarked
+      const formats = stdout
+        .split("\n")
+        .filter(
+          (line) => line.includes("h264") && !line.includes("watermarked")
+        );
 
-      // Удаляем файл после отправки
-      fs.unlink(fileName, (err) => {
-        if (err) console.error(`⚠️ Ошибка удаления файла: ${err.message}`);
-      });
-
-      const { data, error } = await supabase
-        .from("users")
-        .select("downloads")
-        .eq("telegram_id", user.id)
-        .single();
-
-      if (error || !data) {
-        console.error("❌ Ошибка при получении количества скачиваний:", error);
-      } else {
-        // Увеличиваем downloads на 1
-        const newDownloads = (data.downloads ?? 0) + 1;
-
-        const { error: updateError } = await supabase
-          .from("users")
-          .update({ downloads: newDownloads })
-          .eq("telegram_id", user.id);
-
-        if (updateError) {
-          console.error(
-            "❌ Ошибка при обновлении количества скачиваний:",
-            updateError
-          );
-        } else {
-          console.log(`✅ Количество скачиваний обновлено: ${newDownloads}`);
-        }
+      if (formats.length === 0) {
+        return ctx.reply("⚠️ Не вдалося знайти відповідний формат відео.");
       }
-    } else {
-      ctx.reply("❌ Помилка: файл відео не знайдено після завантаження.");
+
+      // Выбираем формат с наибольшим битрейтом (TBR)
+      const bestFormat = formats.reduce(
+        (max, line) => {
+          const match = line.match(/(\d+)k/); // Ищем битрейт в строке
+          const bitrate = match ? parseInt(match[1], 10) : 0;
+          return bitrate > max.bitrate ? { line, bitrate } : max;
+        },
+        { line: "", bitrate: 0 }
+      );
+
+      if (!bestFormat.line) {
+        return ctx.reply("⚠️ Не вдалося знайти підходящий формат.");
+      }
+
+      const formatId = bestFormat.line.split(" ")[0]; // Получаем ID формата
+      console.log(`📜 Вибрано найкращий формат: ${formatId}`);
+
+      // После выбора формата проверяем размер видео
+      exec(ytDlpCommands.analyzeVideo(url), async (error, stdout, stderr) => {
+        if (error || stderr) {
+          console.error(
+            "❌ Ошибка получения информации о видео:",
+            error || stderr
+          );
+          return ctx.reply("⚠️ Не вдалося отримати інформацію про відео.");
+        }
+
+        try {
+          const metadata = JSON.parse(stdout);
+          const fileSize = metadata.filesize ?? metadata.filesize_approx ?? 0;
+          const maxSize = 50 * 1024 * 1024; // 50MB
+          const fileSizeInMb = Math.round(fileSize / 1024 / 1024);
+
+          if (fileSize === 0) {
+            return ctx.reply("⚠️ Не вдалося визначити розмір відео.");
+          }
+
+          if (fileSize > maxSize) {
+            return ctx.reply(
+              `❌ Відео занадто велике (${fileSizeInMb} MB). Ліміт: 50 MB.`
+            );
+          }
+
+          console.log(`✅ Розмір відео: ${fileSizeInMb} MB. Завантажую...`);
+
+          // Обновляем статистику пользователя
+          const { data, error } = await supabase
+            .from("users")
+            .select("downloads, total_downloads_size")
+            .eq("telegram_id", user.id)
+            .single();
+
+          if (error || !data) {
+            console.error(
+              "❌ Ошибка при получении данных пользователя:",
+              error
+            );
+          } else {
+            const newDownloads = (data.downloads ?? 0) + 1;
+            const newTotalSize =
+              (data.total_downloads_size ?? 0) + fileSizeInMb;
+
+            const { error: updateError } = await supabase
+              .from("users")
+              .update({
+                downloads: newDownloads,
+                total_downloads_size: newTotalSize,
+              })
+              .eq("telegram_id", user.id);
+
+            if (updateError) {
+              console.error(
+                "❌ Ошибка при обновлении данных пользователя:",
+                updateError
+              );
+            } else {
+              console.log(
+                `✅ Обновлено: скачиваний - ${newDownloads}, общий размер - ${newTotalSize} MB`
+              );
+            }
+          }
+
+          // Скачиваем видео
+          const fileName = `video_${randomUUID()}.mp4`;
+          const command = ytDlpCommands.default(fileName, url, formatId);
+
+          exec(command, async (error, stdout, stderr) => {
+            console.log(stdout);
+            if (error) {
+              console.error(`❌ Ошибка: ${error.message}`);
+              return ctx.reply("Не вдалося завантажити відео.");
+            }
+            if (stderr) console.error(`⚠️ STDERR: ${stderr}`);
+
+            if (fs.existsSync(fileName)) {
+              await ctx.replyWithVideo({ source: fileName });
+
+              // Удаляем файл после отправки
+              fs.unlink(fileName, (err) => {
+                if (err)
+                  console.error(`⚠️ Ошибка удаления файла: ${err.message}`);
+              });
+            } else {
+              ctx.reply(
+                "❌ Помилка: файл відео не знайдено після завантаження."
+              );
+            }
+          });
+        } catch (parseError) {
+          console.error("❌ Ошибка парсинга JSON:", parseError);
+          ctx.reply("⚠️ Виникла помилка при обробці відео.");
+        }
+      });
+    } catch (parseError) {
+      console.error("❌ Ошибка парсинга списка форматов:", parseError);
+      ctx.reply("⚠️ Виникла помилка при виборі формату.");
     }
   });
 });
