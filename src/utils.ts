@@ -1,20 +1,55 @@
-// export const ytDlpCommands = {
-//   default: (fileName: string, url: string) =>
-//     `yt-dlp --no-warnings -f "h264_540p_461239-0" --merge-output-format mp4 -o "${fileName}" "${url}"`,
+import { exec } from "child_process";
+import { ytDlpCommands } from "./commands.js";
+import { supabase } from "./supabase.js";
+import { VideoMetadata } from "./types.js";
 
-//   // default: (fileName: string, url: string) =>
-//   //   `yt-dlp --no-warnings -f best --merge-output-format mp4 -o "${fileName}" "${url}"`,
+export const getVideoMetadata = (
+  url: string
+): Promise<VideoMetadata | null> => {
+  return new Promise((resolve) => {
+    exec(ytDlpCommands.analyzeVideo(url), (error, stdout, stderr) => {
+      if (error || stderr) {
+        console.error(
+          "❌ Ошибка получения информации о видео:",
+          error || stderr
+        );
+        return resolve(null);
+      }
 
-//   analyzeVideo: (url: string) =>
-//     `yt-dlp --no-warnings -j --flat-playlist "${url}"`,
-// };
-// //h264_540p_461239 - шв
+      try {
+        const metadata = JSON.parse(stdout);
+        const formatId = metadata.format_id;
+        const fileSize = metadata.filesize ?? metadata.filesize_approx ?? null;
+        resolve({ formatId, fileSize });
+      } catch (parseError) {
+        console.error("❌ Ошибка парсинга JSON:", parseError);
+        resolve(null);
+      }
+    });
+  });
+};
 
-export const ytDlpCommands = {
-  analyzeVideo: (url: string) => `yt-dlp --no-warnings -j "${url}"`,
-  listFormats: (url: string) => `yt-dlp -F "${url}"`,
-  tikTok: (fileName: string, url: string, formatId: string) =>
-    `yt-dlp --no-warnings -f "${formatId}" --merge-output-format mp4 -o "${fileName}" "${url}"`,
-  default: (fileName: string, url: string) =>
-    `yt-dlp --no-warnings -f best --merge-output-format mp4 -o "${fileName}" "${url}"`,
+export const downloadVideo = (
+  fileName: string,
+  url: string,
+  isTikTok: boolean,
+  formatId?: string
+): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const command = ytDlpCommands.download(
+      fileName,
+      url,
+      isTikTok ? formatId : undefined
+    );
+    exec(command, (error, stdout, stderr) => {
+      console.log(stdout);
+      if (error || stderr) {
+        console.error(
+          `❌ Ошибка скачивания видео: ${error?.message || stderr}`
+        );
+        return reject(error);
+      }
+      resolve();
+    });
+  });
 };
