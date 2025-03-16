@@ -4,14 +4,17 @@
   "type": "module",
   "scripts": {
     "start": "apt update && apt install -y python3-pip && pip3 install yt-dlp && export PATH=$PATH:/usr/local/bin && npm run bot",
-    "bot": "node --loader ts-node/esm src/bot.ts"
+    "bot": "node --loader ts-node/esm src/bot.ts",
+    "local": "nodemon --exec 'node --loader ts-node/esm' src/bot.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
     "dotenv": "^16.0.3",
     "telegraf": "^4.12.2"
   },
   "devDependencies": {
     "@types/node": "^18.15.11",
+    "nodemon": "^3.1.9",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   }
