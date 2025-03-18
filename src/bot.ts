@@ -37,7 +37,6 @@ bot.on("text", async (ctx) => {
   ctx.reply("🔍 Отримую інформацію про відео...");
 
   try {
-    // Получаем метаданные видео
     const metadata: VideoMetadata | null = await getVideoMetadata(url);
 
     if (!metadata) {
