@@ -1,6 +1,5 @@
 import { exec } from "child_process";
 import { ytDlpCommands } from "./commands.js";
-import { supabase } from "./supabase.js";
 import { VideoMetadata } from "./types.js";
 
 export const getVideoMetadata = (
@@ -10,7 +9,7 @@ export const getVideoMetadata = (
     exec(ytDlpCommands.analyzeVideo(url), (error, stdout, stderr) => {
       if (error || stderr) {
         console.error(
-          "❌ Ошибка получения информации о видео:",
+          "❌ Помилки при отриманні інформації про відео:",
           error || stderr
         );
         return resolve(null);
@@ -22,7 +21,7 @@ export const getVideoMetadata = (
         const fileSize = metadata.filesize ?? metadata.filesize_approx ?? null;
         resolve({ formatId, fileSize });
       } catch (parseError) {
-        console.error("❌ Ошибка парсинга JSON:", parseError);
+        console.error("❌ Помилка парсинга JSON:", parseError);
         resolve(null);
       }
     });
@@ -45,7 +44,7 @@ export const downloadVideo = (
       console.log(stdout);
       if (error || stderr) {
         console.error(
-          `❌ Ошибка скачивания видео: ${error?.message || stderr}`
+          `❌ Помилка завантаження відео: ${error?.message || stderr}`
         );
         return reject(error);
       }

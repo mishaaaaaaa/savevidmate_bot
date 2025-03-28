@@ -48,7 +48,7 @@ bot.on("text", async (ctx) => {
     const maxSize = 50 * 1024 * 1024; // 50MB
     const fileSizeInMb = metadata.fileSize
       ? Math.round(metadata.fileSize / 1024 / 1024)
-      : null;
+      : 0;
 
     if (fileSizeInMb !== null && metadata?.fileSize! > maxSize) {
       return ctx.reply(
@@ -58,23 +58,17 @@ bot.on("text", async (ctx) => {
 
     console.log(
       `✅ Розмір відео: ${
-        fileSizeInMb ? fileSizeInMb + " MB" : "невідомий"
+        fileSizeInMb ? fileSizeInMb + " MB" : 0
       }. Завантажую...`
     );
 
-    // Обновляем статистику пользователя
-    if (fileSizeInMb !== null) {
-      await updateUserStats(user.id, fileSizeInMb);
-    }
+    await updateUserStats(user.id, fileSizeInMb ? fileSizeInMb : 0);
 
-    // Скачиваем видео
     const fileName = `video_${randomUUID()}.mp4`;
     await downloadVideo(fileName, url, isTikTok, metadata.formatId);
 
-    // Отправляем видео
     await ctx.replyWithVideo({ source: fileName });
 
-    // Удаляем файл после отправки
     fs.unlinkSync(fileName);
   } catch (error) {
     console.error("❌ Ошибка обработки видео:", error);
@@ -83,7 +77,7 @@ bot.on("text", async (ctx) => {
 });
 
 bot.launch();
-console.log("🚀 Бот запущен!");
+console.log("🚀 Бот запущений!");
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));

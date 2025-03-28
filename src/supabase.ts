@@ -23,7 +23,7 @@ export const createUser = async (user: User) => {
   ]);
 
   if (error) {
-    console.error("❌ Ошибка при сохранении пользователя:", error);
+    console.error("❌ Помилка при збереженні користувача:", error);
   }
 };
 
@@ -38,7 +38,7 @@ export const updateUserStats = async (
     .single();
 
   if (error || !data) {
-    console.error("❌ Ошибка при получении данных пользователя:", error);
+    console.error("❌ Помилка при отриманні даних користувача:", error);
     return;
   }
 
